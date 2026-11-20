@@ -1,80 +1,93 @@
-# RMA_AI — Assistant Chatbot IA (niveau 1 de support)
+# RMA_AI — Level 1 Helpdesk Chatbot
 
-Application de support interne pour RMA : un chatbot (Microsoft Copilot
-Studio) répond en premier niveau aux demandes fréquentes des employés
-(mot de passe, accès applicatifs, procédures RH, messagerie...). Quand il
-n'arrive pas à résoudre la demande, il propose de créer automatiquement un
-ticket Helpdesk, pré-rempli avec les informations du profil de l'employé
-(nom, prénom, immeuble, étage).
+An internal support application for RMA. A chatbot powered by Microsoft
+Copilot Studio provides first-level assistance with common employee
+requests, including password issues, application access, HR procedures,
+and email. When it cannot resolve a request, it offers to create a
+helpdesk ticket prefilled with the employee's profile information (first
+name, last name, building, and floor).
 
-## Stack technique
-- **Backend** : Python / FastAPI
-- **Frontend** : React
-- **Base de données** : SQL Server
-- **IA** : Microsoft Copilot Studio (agent conversationnel), intégré au
-  backend via le **Direct Line API** (canal officiellement recommandé par
-  Microsoft pour connecter un agent Copilot Studio à une application
-  personnalisée — cf. doc Microsoft Learn "Publish an agent to mobile or
-  custom apps").
+## Technology stack
+- **Backend:** Python / FastAPI
+- **Frontend:** React
+- **Database:** SQL Server
+- **AI:** Microsoft Copilot Studio, integrated with the backend through the
+  **Direct Line API** for connecting the agent to a custom application.
 
-## Structure du projet
+## Project structure
 ```
 rma-helpdesk/
 ├── database/
-│   └── schema.sql              # Script de création SQL Server
+│   └── schema.sql                 # SQL Server database creation script
 ├── backend/
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── app/
-│       ├── main.py             # Point d'entrée FastAPI
-│       ├── database.py         # Connexion SQL Server + settings
-│       ├── models.py           # Modèles SQLAlchemy
-│       ├── schemas.py          # Schémas Pydantic (validation immeuble/étage)
-│       ├── security.py         # JWT + hash des mots de passe
+│       ├── main.py                # FastAPI entry point
+│       ├── database.py            # SQL Server connection and settings
+│       ├── models.py              # SQLAlchemy models
+│       ├── schemas.py             # Pydantic schemas and input validation
+│       ├── security.py            # JWT and password hashing
 │       ├── routers/
-│       │   ├── auth.py         # Inscription / connexion / mot de passe oublié
-│       │   ├── profile.py      # Profil utilisateur
-│       │   ├── tickets.py      # Création, liste, historique des tickets
-│       │   └── chat.py         # Échange avec Copilot Studio + suggestion ticket
+│       │   ├── auth.py            # Registration, login, and password reset
+│       │   ├── profile.py         # User profile
+│       │   ├── tickets.py         # Ticket creation, list, and history
+│       │   └── chat.py            # Copilot Studio chat and ticket suggestions
 │       └── services/
-│           └── copilot_service.py  # Client Direct Line API
+│           ├── email_service.py   # Email delivery
+│           ├── file_storage.py    # Uploaded file storage
+│           ├── groq_service.py    # Groq AI integration
+│           └── knowledge_base.py  # Knowledge base search
 └── frontend/
     ├── package.json
     ├── public/index.html
     └── src/
-        ├── App.jsx             # Routage (login, register, page principale)
+        ├── App.jsx                # Application routing
         ├── styles.css
-        ├── api/api.js          # Client Axios centralisé
+        ├── api/api.js             # Centralized Axios client
         ├── pages/
         │   ├── Login.jsx
         │   ├── Register.jsx
         │   ├── ForgotPassword.jsx
-        │   └── MainPage.jsx    # Onglets : Assistant / Mes tickets / Historique / Profil
+        │   └── MainPage.jsx       # Assistant, tickets, history, and profile
         └── components/
             ├── ChatBot.jsx
+            ├── ChatHistory.jsx
             ├── TicketList.jsx
-            ├── TicketHistory.jsx
             └── Profile.jsx
 ```
 
-## Mise en route
+## Getting started
 
-### 1. Base de données
+### 1. Database
+Run the schema script against your SQL Server instance:
 ```bash
-sqlcmd -S localhost -U sa -P <votre_mdp> -i database/schema.sql
+sqlcmd -S localhost -U sa -P <your_password> -i database/schema.sql
 ```
 
 ### 2. Backend
 ```bash
 cd backend
-python -m venv venv && source venv/bin/activate   # ou venv\Scripts\activate sous Windows
+python -m venv venv
+# macOS/Linux:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env   # puis renseigner DB_*, SECRET_KEY, COPILOT_DIRECTLINE_SECRET...
+cp .env.example .env
+```
+
+Edit `.env` and provide your database, secret key, AI, and email settings.
+Then start the API:
+```bash
 uvicorn app.main:app --reload --port 8000
 ```
-API disponible sur `http://localhost:8000` (doc interactive : `/docs`).
 
-> Note: cette commande doit être lancée depuis le dossier `backend`. Si vous préférez rester à la racine du projet, utilisez `python -m uvicorn backend.app.main:app --reload --port 8000`.
+The API is available at `http://localhost:8000`. Interactive API
+documentation is at `http://localhost:8000/docs`.
+
+> Run the command from the `backend` directory. Alternatively, from the
+> project root, run `python -m uvicorn backend.app.main:app --reload --port 8000`.
 
 ### 3. Frontend
 ```bash
@@ -82,35 +95,35 @@ cd frontend
 npm install
 npm start
 ```
-Application disponible sur `http://localhost:3000`.
 
-> Astuce : si le port `3000` est déjà occupé, Create React App propose automatiquement un autre port (par exemple `3001`). Acceptez la proposition ou définissez `set PORT=3001` avant d'exécuter `npm start` sous Windows.
+The application is available at `http://localhost:3000`. If port 3000 is
+already in use, Create React App will offer another port (such as 3001).
+On Windows, you can also set a different port with `set PORT=3001` before
+running `npm start`.
 
-## Intégration Microsoft Copilot Studio
-1. Créer/publier votre agent dans Copilot Studio (sujets : mot de passe,
-   accès applicatifs, procédures RH, messagerie, + un sujet **Escalade**
-   qui déclenche un événement `EscaladeHelpdesk` quand l'agent ne peut pas
-   résoudre la demande).
-2. Activer le canal **Direct Line** dans Paramètres > Canaux, récupérer le
-   secret.
-3. Renseigner `COPILOT_DIRECTLINE_SECRET` dans `.env`.
-4. Le backend (`services/copilot_service.py`) gère : démarrage de
-   conversation, envoi des messages utilisateur, récupération des réponses
-   du bot, détection de l'événement d'escalade.
-5. Le frontend (`ChatBot.jsx`) affiche l'échange et propose la création
-   d'un ticket dès que :
-   - l'agent déclenche l'événement d'escalade, **ou**
-   - un seuil de tentatives infructueuses est atteint (3 par défaut,
-     réglable via `SEUIL_ECHECS_AVANT_TICKET`).
+## Microsoft Copilot Studio integration
+1. Create and publish your agent in Copilot Studio. Configure topics for
+   password issues, application access, HR procedures, and email. Add an
+   **Escalation** topic that triggers the `EscaladeHelpdesk` event when the
+   agent cannot resolve a request.
+2. Enable the **Direct Line** channel under Settings > Channels and obtain
+   its secret.
+3. Set `COPILOT_DIRECTLINE_SECRET` in `.env`.
+4. The backend starts conversations, sends user messages, retrieves bot
+   replies, and detects the escalation event.
+5. The frontend (`ChatBot.jsx`) displays the conversation and offers to
+   create a ticket when either:
+   - The agent triggers the escalation event; or
+   - The configured threshold for unsuccessful attempts is reached (3 by
+     default, configurable with `SEUIL_ECHECS_AVANT_TICKET`).
 
-## Points à finaliser avant mise en production
-- Implémenter l'envoi d'email réel pour "mot de passe oublié" (table
-  `PasswordResetTokens` déjà prévue dans `schema.sql`) et la route
-  `reset-password`.
-- Restreindre les origines CORS (`app/main.py`) au domaine réel du
-  frontend.
-- Ajouter la pagination sur `/tickets` et `/tickets/historique` si le
-  volume devient important.
-- Ajouter un rôle "Agent Helpdesk" (back-office) pour la prise en charge
-  des tickets créés — non couvert dans ce squelette, qui se concentre sur
-  le parcours employé.
+## Before production
+- Implement actual email delivery for password resets and add the
+  `reset-password` route. The `PasswordResetTokens` table is already
+  defined in `schema.sql`.
+- Restrict CORS origins in `app/main.py` to the production frontend domain.
+- Add pagination to `/tickets` and `/tickets/historique` if the number of
+  records grows.
+- Add a back-office "Helpdesk Agent" role for handling submitted tickets.
+  This starter project focuses on the employee experience and does not
+  include that role.
