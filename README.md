@@ -1,5 +1,7 @@
 # RMA_AI — Level 1 Helpdesk Chatbot
 
+## Description
+
 An internal support application for RMA. A chatbot powered by Microsoft
 Copilot Studio provides first-level assistance with common employee
 requests, including password issues, application access, HR procedures,
